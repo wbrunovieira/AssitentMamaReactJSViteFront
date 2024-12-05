@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import axios from 'axios';
 
 declare global {
   interface Window {
@@ -102,7 +103,7 @@ const useVoiceRecognition = () => {
       }
     };
 
-    recognition.onresult = (
+    recognition.onresult = async (
       event: SpeechRecognitionEvent
     ) => {
       const transcript =
@@ -113,26 +114,25 @@ const useVoiceRecognition = () => {
 
       if (transcript.includes('oi márcia')) {
         setCommandRecognized(true);
-        console.log('Comando reconhecido: Oi Marcia');
+        console.log('Comando reconhecido: Oi Márcia');
 
-        fetch('http://localhost:3030/log-command', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ command: 'Oi Márcia' }),
-        })
-          .then(response => {
-            if (response.ok) {
-              console.log('Comando enviado com sucesso!');
-            } else {
-              console.error(
-                'Erro ao enviar comando para o backend:',
-                response.status
-              );
+        try {
+          const response = await axios.post(
+            'http://localhost:3030/message',
+            {
+              content: 'Oi Márcia',
             }
-          })
-          .catch(error => console.error('Erro:', error));
+          );
+          console.log(
+            'Resposta do backend:',
+            response.data
+          );
+        } catch (error) {
+          console.error(
+            'Erro ao enviar comando para o backend:',
+            error
+          );
+        }
       }
     };
 
