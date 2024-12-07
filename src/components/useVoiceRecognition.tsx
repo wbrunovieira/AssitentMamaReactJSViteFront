@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import axios from 'axios';
 
 declare global {
@@ -18,27 +18,28 @@ interface SpeechRecognitionEvent extends Event {
 }
 
 const useVoiceRecognition = () => {
+  const recognitionRef = useRef<SpeechRecognition | null>(
+    null
+  );
+
   const [isListening, setIsListening] = useState(false);
   const [commandRecognized, setCommandRecognized] =
     useState(false);
-  const [isError, setIsError] = useState(false);
   const [microphoneError, setMicrophoneError] = useState<
+    string | null
+  >(null);
+  const [backendResponse, setBackendResponse] = useState<
     string | null
   >(null);
 
   useEffect(() => {
+    // Solicita permissão do microfone uma única vez
     if (
       navigator.mediaDevices &&
       navigator.mediaDevices.getUserMedia
     ) {
       navigator.mediaDevices
         .getUserMedia({ audio: true })
-        .then(stream => {
-          console.log(
-            'Microfone habilitado stream',
-            stream
-          );
-        })
         .catch(error => {
           console.error(
             'Erro ao acessar o microfone:',
@@ -54,11 +55,11 @@ const useVoiceRecognition = () => {
     }
   }, []);
 
+  // Cria o reconhecimento apenas uma vez
   useEffect(() => {
     const SpeechRecognition =
       window.SpeechRecognition ||
       window.webkitSpeechRecognition;
-
     if (!SpeechRecognition) {
       console.warn(
         'SpeechRecognition API não está disponível no navegador.'
@@ -66,20 +67,29 @@ const useVoiceRecognition = () => {
       return;
     }
 
-    const recognition = new SpeechRecognition();
-    recognition.continuous = true;
-    recognition.interimResults = true;
-    recognition.lang = 'pt-BR';
+    const rec = new SpeechRecognition();
+    rec.continuous = true;
+    rec.interimResults = true;
+    rec.lang = 'pt-BR';
+    recognitionRef.current = rec;
+  }, []);
+
+  // Configura os handlers uma única vez, após ter o recognition disponível
+  useEffect(() => {
+    const recognition = recognitionRef.current;
+    if (!recognition) return;
 
     recognition.onstart = () => {
       console.log('Reconhecimento de voz iniciado.');
       setIsListening(true);
-      setIsError(false);
     };
 
     recognition.onend = () => {
+      // Não reiniciamos aqui para evitar loop de aborted.
       console.log('Reconhecimento de voz finalizado.');
       setIsListening(false);
+      // Se quiser tentar reiniciar após parar espontaneamente, faça com cuidado:
+      // setTimeout(() => recognition.start(), 1000);
     };
 
     recognition.onerror = (
@@ -89,18 +99,7 @@ const useVoiceRecognition = () => {
         'Erro no reconhecimento de voz:',
         event.error
       );
-      if (event.error === 'no-speech') {
-        console.log('Nenhuma fala detectada.');
-        setIsListening(false);
-        setIsError(true);
-
-        setTimeout(() => {
-          if (!isError) recognition.start();
-        }, 2000);
-      } else if (event.error === 'aborted') {
-        console.log('Reconhecimento de voz abortado.');
-        setIsListening(false);
-      }
+      // Não chamamos start() aqui para evitar loop.
     };
 
     recognition.onresult = async (
@@ -110,12 +109,11 @@ const useVoiceRecognition = () => {
         event.results[
           event.resultIndex
         ][0].transcript.toLowerCase();
-      console.log('Reconhecimento: ', transcript);
+      console.log('Reconhecimento:', transcript);
 
       if (transcript.includes('oi márcia')) {
         setCommandRecognized(true);
         console.log('Comando reconhecido: Oi Márcia');
-
         try {
           const response = await axios.post(
             'http://localhost:3030/message',
@@ -127,6 +125,7 @@ const useVoiceRecognition = () => {
             'Resposta do backend:',
             response.data
           );
+          setBackendResponse(response.data.reply);
         } catch (error) {
           console.error(
             'Erro ao enviar comando para o backend:',
@@ -136,17 +135,22 @@ const useVoiceRecognition = () => {
       }
     };
 
-    recognition.start();
+    try {
+      recognition.start();
+    } catch (e) {
+      console.error('Erro ao iniciar o reconhecimento:', e);
+    }
 
     return () => {
       recognition.stop();
     };
-  }, [isError]);
+  }, []);
 
   return {
     isListening,
     commandRecognized,
     microphoneError,
+    backendResponse,
   };
 };
 
