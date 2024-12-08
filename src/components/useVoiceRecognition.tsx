@@ -33,7 +33,6 @@ const useVoiceRecognition = () => {
   >(null);
 
   useEffect(() => {
-    // Solicita permissão do microfone uma única vez
     if (
       navigator.mediaDevices &&
       navigator.mediaDevices.getUserMedia
@@ -55,7 +54,6 @@ const useVoiceRecognition = () => {
     }
   }, []);
 
-  // Cria o reconhecimento apenas uma vez
   useEffect(() => {
     const SpeechRecognition =
       window.SpeechRecognition ||
@@ -74,7 +72,6 @@ const useVoiceRecognition = () => {
     recognitionRef.current = rec;
   }, []);
 
-  // Configura os handlers uma única vez, após ter o recognition disponível
   useEffect(() => {
     const recognition = recognitionRef.current;
     if (!recognition) return;
@@ -85,11 +82,8 @@ const useVoiceRecognition = () => {
     };
 
     recognition.onend = () => {
-      // Não reiniciamos aqui para evitar loop de aborted.
       console.log('Reconhecimento de voz finalizado.');
       setIsListening(false);
-      // Se quiser tentar reiniciar após parar espontaneamente, faça com cuidado:
-      // setTimeout(() => recognition.start(), 1000);
     };
 
     recognition.onerror = (
@@ -99,7 +93,6 @@ const useVoiceRecognition = () => {
         'Erro no reconhecimento de voz:',
         event.error
       );
-      // Não chamamos start() aqui para evitar loop.
     };
 
     recognition.onresult = async (
